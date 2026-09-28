@@ -1,6 +1,6 @@
-import type { AgentAction, Auction, Bidder, Brand, Fit, RankedOffer } from '../shared/types';
+import type { AgentAction, Auction, AuditTrace, Bidder, Brand, Fit, RankedOffer, TraceJSON } from '../shared/types';
 
-type ModelConfig = { apiKey: string; model: string };
+type ModelConfig = { apiKey: string; model: string; onTrace?:(event:AuditTrace)=>void; actor?:string; round?:number };
 type JsonRecord = Record<string, unknown>;
 const invalidOutput = () => new Error('The model returned an invalid structured decision.');
 const isRecord = (value: unknown): value is JsonRecord => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -23,9 +23,25 @@ function publicOffer(offer: RankedOffer) {
 async function callTool(config: ModelConfig, name: string, description: string, schema: unknown,
   instructions: string, input: unknown, signal?: AbortSignal): Promise<unknown> {
   if (!config.apiKey || !config.model) throw new Error('Live agents require an OpenAI API key and model.');
+  const started=Date.now(), correlation=crypto.randomUUID();
+  const endpoint='https://api.openai.com/v1/responses';
+  const trace=(kind:string, details:Omit<Partial<AuditTrace>,'payload'>&{payload?:unknown}={})=>config.onTrace?.({
+    id:crypto.randomUUID(),at:new Date().toISOString(),kind,actor:config.actor??(name==='assess_fit'?'user-agent':'brand-agent'),
+    round:config.round,correlation_id:correlation,method:'POST',url:endpoint,provider:'OpenAI',model:config.model,...details,
+    payload:details.payload===undefined?undefined:JSON.parse(JSON.stringify(details.payload)) as TraceJSON,
+  });
+  const publicInput=isRecord(input)?Object.fromEntries(Object.entries(input).filter(([key])=>key!=='private_campaign')):null;
+  if(publicInput&&Array.isArray(publicInput.own_offer_history))publicInput.own_offer_history=publicInput.own_offer_history.map(entry=>{
+    if(!isRecord(entry))return null;
+    const action=isRecord(entry.action)?Object.fromEntries(Object.entries(entry.action).filter(([key])=>key!=='explanation')):entry.action;
+    return {round:entry.round,offer:entry.offer,action};
+  });
+  trace('model.request',{status:'pending',redacted:['Authorization','instructions',...(name==='submit_action'?['input.private_campaign','input.own_offer_history.action.explanation','tools.parameters (private campaign bounds)']:[])],
+    payload:{model:config.model,store:false,max_output_tokens:1400,input:publicInput,tool_choice:{type:'function',name},
+      tools:[{type:'function',name,description,strict:true,parameters:name==='submit_action'?'[REDACTED: private campaign bounds]':schema}],parallel_tool_calls:false}});
   let response: Response;
   try {
-    response = await fetch('https://api.openai.com/v1/responses', {
+    response = await fetch(endpoint, {
       method: 'POST', signal,
       headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: config.model, store: false, max_output_tokens: 1400,
@@ -34,16 +50,33 @@ async function callTool(config: ModelConfig, name: string, description: string, 
         tool_choice: { type: 'function', name }, parallel_tool_calls: false }),
     });
   } catch {
-    throw new Error(signal?.aborted ? 'The model request exceeded its deadline or was cancelled.' : 'The model service could not be reached.');
+    const error=signal?.aborted ? 'The model request exceeded its deadline or was cancelled.' : 'The model service could not be reached.';
+    trace('model.error',{status:signal?.aborted?'timeout':'failed',duration_ms:Date.now()-started,error});
+    throw new Error(error);
   }
   // Do not echo provider errors: they can contain prompt text or account information.
-  if (!response.ok) throw new Error(`The model service rejected the request (HTTP ${response.status}).`);
+  if (!response.ok) {
+    const error=`The model service rejected the request (HTTP ${response.status}).`;
+    trace('model.error',{status:'failed',http_status:response.status,duration_ms:Date.now()-started,error});throw new Error(error);
+  }
   let payload: unknown;
-  try { payload = await response.json(); } catch { throw invalidOutput(); }
-  if (!isRecord(payload) || payload.status !== 'completed' || !Array.isArray(payload.output)) throw invalidOutput();
-  const calls = payload.output.filter((entry: unknown) => isRecord(entry) && entry.type === 'function_call');
-  if (calls.length !== 1 || !isRecord(calls[0]) || calls[0].name !== name || typeof calls[0].arguments !== 'string') throw invalidOutput();
-  try { return JSON.parse(calls[0].arguments); } catch { throw invalidOutput(); }
+  try {
+    payload = await response.json();
+    if (!isRecord(payload) || payload.status !== 'completed' || !Array.isArray(payload.output)) throw invalidOutput();
+    const calls = payload.output.filter((entry: unknown) => isRecord(entry) && entry.type === 'function_call');
+    if (calls.length !== 1 || !isRecord(calls[0]) || calls[0].name !== name || typeof calls[0].arguments !== 'string') throw invalidOutput();
+    const result:unknown=JSON.parse(calls[0].arguments);
+    // Only protocol fields are visible. Extra provider fields and arbitrary model strings are never copied.
+    const number=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)?value:null;
+    const catalogIds=publicInput&&Array.isArray(publicInput.catalog)?publicInput.catalog.filter(isRecord).map(item=>item.brand_id):[];
+    const publicResult=isRecord(result)?name==='assess_fit'&&Array.isArray(result.fits)?{fits:result.fits.slice(0,20).map(fit=>isRecord(fit)?{brand_id:typeof fit.brand_id==='string'&&catalogIds.includes(fit.brand_id)?fit.brand_id:null,score:number(fit.score)}:null)}:
+      {action:typeof result.action==='string'&&['submit','hold','withdraw','finalize'].includes(result.action)?result.action:'invalid',bid_cents:number(result.bid_cents),discount_cents:number(result.discount_cents),final:typeof result.final==='boolean'?result.final:null}:null;
+    trace('model.response',{status:'received',http_status:response.status,duration_ms:Date.now()-started,
+      provider_request_id:response.headers.get('x-request-id')??undefined,payload:{tool:name,arguments:publicResult,validation:'pending'},redacted:['provider metadata','unvalidated explanation']});
+    return result;
+  } catch {
+    trace('model.error',{status:'invalid_response',http_status:response.status,duration_ms:Date.now()-started,error:invalidOutput().message});throw invalidOutput();
+  }
 }
 
 export async function assessFits(auction: Auction, config: ModelConfig, signal?: AbortSignal): Promise<Fit[]> {

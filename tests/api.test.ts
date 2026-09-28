@@ -15,7 +15,7 @@ function setup() {
     click: vi.fn().mockResolvedValue({}), updateCampaign: vi.fn().mockResolvedValue({}),
     simulationFund: vi.fn().mockResolvedValue({}), fund: vi.fn().mockResolvedValue({ credited: true }),
   };
-  const env = { ADMIN_TOKEN: 'admin-secret', PUBLISHER_API_KEY: 'publisher-secret', STRIPE_SECRET_KEY: 'stripe-secret',
+  const env = { ADMIN_TOKEN: 'admin-secret', OPERATOR_WORKSPACE_ID: workspaceId, DEMO_WORKSPACE_ID: workspaceId, PUBLISHER_API_KEYS: JSON.stringify({wavelength:'publisher-secret',wardrobe:'wardrobe-secret',cityguide:'cityguide-secret'}), PUBLISHER_API_KEY: 'legacy-secret', STRIPE_SECRET_KEY: 'stripe-secret',
     STRIPE_WEBHOOK_SECRET: 'signing-secret', ASSETS: { fetch: vi.fn().mockResolvedValue(new Response('asset')) },
     EXCHANGE: { getByName: vi.fn().mockReturnValue(workspace) } };
   const fetch = (path: string, options: { method?: string; data?: unknown; raw?: string; headers?: Record<string,string>; host?: string } = {}) => {
@@ -25,7 +25,7 @@ function setup() {
   return { env, workspace, fetch };
 }
 const valid = { scenario: 'dating', intent: 'Coffee date', mode: 'simulation', preferences: ['quiet'] };
-const admin = { 'x-admin-token': 'admin-secret', cookie: `accord_workspace=${workspaceId}` };
+const admin = { 'x-admin-token': 'admin-secret', 'x-workspace-id': workspaceId };
 const publisher = { authorization: 'Bearer publisher-secret', 'x-workspace-id': workspaceId };
 
 beforeEach(() => vi.clearAllMocks());
@@ -35,22 +35,19 @@ describe('exchange HTTP boundary', () => {
     expect(await (await fetch('/')).text()).toBe('asset');
     expect(env.EXCHANGE.getByName).not.toHaveBeenCalled();
   });
-  it('issues a private same-site workspace cookie and never trusts an anonymous workspace override', async () => {
+  it('rejects anonymous reads and ignores unsigned workspace cookies', async () => {
     const { env, fetch } = setup();
-    const response = await fetch('/api/bootstrap', { headers: { 'x-workspace-id': workspaceId } });
-    expect(response.status).toBe(200);
-    const cookie = response.headers.get('set-cookie')!;
-    expect(cookie).toContain('HttpOnly; SameSite=Strict');
-    expect(cookie).toContain('Secure');
-    expect(cookie).not.toContain(workspaceId);
-    expect(env.EXCHANGE.getByName).not.toHaveBeenCalledWith(workspaceId);
+    const response = await fetch('/api/bootstrap', { headers: { 'x-workspace-id': workspaceId, cookie: `accord_workspace=${workspaceId}` } });
+    expect(response.status).toBe(401);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(env.EXCHANGE.getByName).not.toHaveBeenCalled();
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
-  it('reuses the browser cookie workspace and separates independent browsers', async () => {
+  it('keeps the authenticated admin in the configured owner workspace despite unsigned overrides', async () => {
     const { env, fetch } = setup();
-    expect((await fetch('/v1/ledger', { headers: { cookie: `accord_workspace=${workspaceId}` } })).headers.get('set-cookie')).toBeNull();
-    await fetch('/v1/ledger', { headers: { cookie: `accord_workspace=${otherId}` } });
-    expect(env.EXCHANGE.getByName.mock.calls.map(call => call[0])).toEqual([workspaceId, otherId]);
+    const response = await fetch('/v1/ledger', { headers: { 'x-admin-token': 'admin-secret', cookie: `accord_workspace=${otherId}`, 'x-workspace-id':otherId } });
+    expect(response.status).toBe(200);expect(response.headers.get('set-cookie')).toBeNull();
+    expect(env.EXCHANGE.getByName).toHaveBeenLastCalledWith(workspaceId);
   });
   it('requires authentication before parsing a remote mutation', async () => {
     const { workspace, fetch } = setup();

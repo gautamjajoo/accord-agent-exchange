@@ -14,7 +14,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
     placement: { id: placementId, auction_id: auctionId, code: 'SIGHTGLASS-DEMO' },
     bidders: [{ campaign: { strategy: 'PRIVATE_CAMPAIGN', max_cpc_cents: 999 } }],
     rounds: [{ offers: [{ private: 'PUBLIC_BOARD_NOT_FOR_CONSUMER' }] }],
-    events: [{ message: 'INTERNAL_EVENT' }], private_state: 'PRIVATE_STATE', ...overrides,
+    events: [{ message: 'INTERNAL_EVENT' }], trace: [{ kind: 'model.request', payload: 'OPERATOR_ONLY_TRACE' }], private_state: 'PRIVATE_STATE', ...overrides,
   };
 }
 function setup(responseData: unknown = fixture(), responseStatus = 200, envOverride: Record<string, unknown> = {}) {
@@ -88,7 +88,7 @@ describe('consumer publisher adapters', () => {
     const response = await fetch(`/api/auctions/${auctionId}`);
     const body = await response.json() as Record<string,unknown>;
     expect(body).toMatchObject({ id: auctionId, scenario: 'dating', winner: fixture().winner, placement: fixture().placement });
-    for (const key of ['bidders', 'rounds', 'events', 'private_state']) expect(body).not.toHaveProperty(key);
+    for (const key of ['bidders', 'rounds', 'events', 'trace', 'private_state']) expect(body).not.toHaveProperty(key);
     expect(JSON.stringify(body)).not.toMatch(/PRIVATE_|PUBLIC_BOARD_NOT_FOR_CONSUMER|INTERNAL_EVENT/);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');

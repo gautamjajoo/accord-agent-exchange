@@ -1,12 +1,42 @@
 {
-  "$schema":"node_modules/wrangler/config-schema.json",
-  "name":"accord-agent-exchange",
-  "main":"src/server/index.ts",
-  "compatibility_date":"2026-09-28",
-  "compatibility_flags":["nodejs_compat"],
-  "assets":{"directory":"./dist","binding":"ASSETS","not_found_handling":"single-page-application","run_worker_first":["/v1/*","/api/*"]},
-  "durable_objects":{"bindings":[{"name":"EXCHANGE","class_name":"ExchangeWorkspace"}]},
-  "migrations":[{"tag":"v1","new_sqlite_classes":["ExchangeWorkspace"]}],
-  "vars":{"OPENAI_MODEL":"gpt-5.4-mini","DEMO_WORKSPACE_ID":"ef5d07d4-fc2a-41d9-b0bc-e1869dfb8e7c"},
-  "observability":{"enabled":true}
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "accord-agent-exchange",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/v1/*",
+      "/api/*"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EXCHANGE",
+        "class_name": "ExchangeWorkspace"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ExchangeWorkspace"
+      ]
+    }
+  ],
+  "vars": {
+    "OPENAI_MODEL": "gpt-5.4-mini",
+    "DEMO_WORKSPACE_ID": "ef5d07d4-fc2a-41d9-b0bc-e1869dfb8e7c",
+    "OPERATOR_WORKSPACE_ID": "3ef06eb1-e93b-4d71-b6e7-9688f78513c0"
+  },
+  "observability": {
+    "enabled": true
+  }
 }

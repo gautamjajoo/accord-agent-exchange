@@ -20,7 +20,9 @@ const secrets = Object.fromEntries(readFileSync(envFile, 'utf8').split(/\r?\n/).
   if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
   return [[match[1], value]];
 }));
-if (!secrets.PUBLISHER_API_KEY) throw new Error('Add PUBLISHER_API_KEY to the root .dev.vars file first.');
+const publisherKeys=secrets.PUBLISHER_API_KEYS?JSON.parse(secrets.PUBLISHER_API_KEYS):{};
+const publisherIds={dating:'wavelength',fashion:'wardrobe',outings:'cityguide'};
+if (!secrets.PUBLISHER_API_KEY&&!Object.keys(publisherKeys).length) throw new Error('Configure publisher API credentials in .dev.vars.');
 if (!existsSync(join(root, 'dist/index.html')) || !existsSync(join(root, 'apps/consumers/dist/index.html'))) {
   throw new Error('Build the exchange and consumer apps before starting: npm run build && npm run build:consumers');
 }
@@ -60,6 +62,6 @@ for (const [index, scenario] of ['dating', 'fashion', 'outings'].entries()) {
   delete config.services; // Local adapters use their own HTTP server on port 8787.
   const path = join(local, 'wrangler.json');
   writeFileSync(path, JSON.stringify(config, null, 2));
-  writeFileSync(join(local, '.dev.vars'), `EXCHANGE_API_KEY=${JSON.stringify(secrets.PUBLISHER_API_KEY)}\n`, { mode: 0o600 });
+  writeFileSync(join(local, '.dev.vars'), `EXCHANGE_API_KEY=${JSON.stringify(publisherKeys[publisherIds[scenario]]||secrets.PUBLISHER_API_KEY)}\n`, { mode: 0o600 });
   launch(config.name, path, 8788 + index, 9230 + index);
 }

@@ -30,7 +30,7 @@ export function PaymentReceipt({ auction, receipt, transfer, transfers }: Paymen
   const noTransferDue = charged && !simulated && publisherCents === 0;
   const transferRows = transfers ?? (transfer ? [transfer] : []);
   const paymentState = expired ? 'expired' : settled ? 'settled' : charged ? 'settling' : 'reserved';
-  const headline = expired ? 'Reservation released.' : settled ? 'Value, accounted for.' : charged ? 'The click becomes value.' : 'Payment waits for the click.';
+  const headline = expired ? 'Reservation released.' : settled ? 'Publisher payment complete' : charged ? 'Publisher payment pending' : 'Reserved until the first click';
   const settlementLabel = !charged ? (simulated ? 'Simulation' : 'Stripe Connect') : simulated ? 'Recorded' : noTransferDue ? 'No transfer due' : settled ? 'Transferred' : 'Transfer pending';
   const transition = { duration: reducedMotion ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] as const };
   const stages = [
@@ -47,19 +47,19 @@ export function PaymentReceipt({ auction, receipt, transfer, transfers }: Paymen
     aria-label="Advertising transaction receipt"
   >
     <div className="payment-heading">
-      <div><div className="eyebrow">03 / TRANSACTION RAIL</div><AnimatePresence mode="wait" initial={false}><motion.h3 key={headline} initial={{ opacity: 0, y: reducedMotion ? 0 : 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.2 }}>{headline}</motion.h3></AnimatePresence></div>
-      <span className={`payment-mode ${simulated ? 'is-simulation' : 'is-sandbox'}`}>{simulated ? <CircleDot size={12}/> : <LockKeyhole size={12}/>}<span>{simulated ? 'SIMULATED FUNDS' : 'STRIPE SANDBOX'}</span></span>
+      <div><div className="eyebrow">Payment receipt</div><AnimatePresence mode="wait" initial={false}><motion.h3 key={headline} initial={{ opacity: 0, y: reducedMotion ? 0 : 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.2 }}>{headline}</motion.h3></AnimatePresence></div>
+      <span className={`payment-mode ${simulated ? 'is-simulation' : 'is-sandbox'}`}>{simulated ? <CircleDot size={12}/> : <LockKeyhole size={12}/>}<span>{simulated ? 'Simulated funds' : 'Stripe sandbox'}</span></span>
     </div>
 
     <ol className="payment-path" aria-label="Payment progress">
       {stages.map((stage, index) => <li key={index} className={`${stage.done ? 'is-done' : ''} ${stage.current ? 'is-current' : ''}`}>
-        <div className="payment-path-top"><motion.span className="payment-step-icon" animate={{ backgroundColor: stage.done && index === 3 ? '#e9eddf' : stage.done && index === 1 ? '#ff6d47' : '#fbfaf9', borderColor: stage.done && index === 3 ? '#9baf81' : stage.done && index === 1 ? '#ff6d47' : stage.done ? '#b49b85' : '#e4ddd5', color: stage.done && index === 3 ? '#647748' : stage.done && index === 1 ? '#fffaf4' : stage.done ? '#82624a' : '#b7ab9d' }} transition={transition}>{stage.done && index === 3 ? <Check size={15}/> : <stage.icon size={15}/>}</motion.span>{index < 3 && <span className="payment-connector" aria-hidden="true"><motion.i initial={false} animate={{ scaleX: charged ? 1 : index === 0 && !expired ? 0.18 : 0 }} transition={{ ...transition, delay: reducedMotion ? 0 : index * 0.08 }}/></span>}</div>
+        <div className="payment-path-top"><motion.span className="payment-step-icon" animate={{ backgroundColor: stage.done && index === 3 ? '#1e3b2e' : stage.done && index === 1 ? '#b88643' : '#101820', borderColor: stage.done && index === 3 ? '#3f6e55' : stage.done && index === 1 ? '#b88643' : stage.done ? '#354453' : '#253341', color: stage.done && index === 3 ? '#8bd6ae' : stage.done && index === 1 ? '#101820' : stage.done ? '#b88643' : '#71859a' }} transition={transition}>{stage.done && index === 3 ? <Check size={15}/> : <stage.icon size={15}/>}</motion.span>{index < 3 && <span className="payment-connector" aria-hidden="true"><motion.i initial={false} animate={{ scaleX: charged ? 1 : index === 0 && !expired ? 0.18 : 0 }} transition={{ ...transition, delay: reducedMotion ? 0 : index * 0.08 }}/></span>}</div>
         <b>{stage.label}</b><small>{stage.detail}</small>
       </li>)}
     </ol>
 
     <div className="payment-allocation">
-      <div className="payment-source"><span>{charged ? 'ADVERTISER CHARGED' : expired ? 'CPC RELEASED' : 'LOCKED COST PER CLICK'}</span><motion.strong key={`${placement.id}:${charged}`} initial={reducedMotion ? false : { opacity: 0, y: 7 }} animate={{ opacity: 1, y: 0 }} transition={transition}>{money(cpc)}</motion.strong><small>{placement.offer.brand_name}</small></div>
+      <div className="payment-source"><span>{charged ? 'Advertiser charged' : expired ? 'Reservation released' : 'Reserved per click'}</span><motion.strong key={`${placement.id}:${charged}`} initial={reducedMotion ? false : { opacity: 0, y: 7 }} animate={{ opacity: 1, y: 0 }} transition={transition}>{money(cpc)}</motion.strong><small>{placement.offer.brand_name}</small></div>
       <div className="payment-split-mark" aria-hidden="true"><ArrowUpRight size={20}/><ArrowDownLeft size={20}/></div>
       <div className="payment-share publisher-share"><span><i/>{publisher} <em>80%</em></span><strong>{money(publisherCents)}</strong><small>{charged ? 'Publisher earnings' : 'On the first click'}</small></div>
       <div className="payment-share network-share"><span><i/>Accord <em>20%</em></span><strong>{money(networkCents)}</strong><small>{charged ? 'Network gross' : 'On the first click'}</small></div>
