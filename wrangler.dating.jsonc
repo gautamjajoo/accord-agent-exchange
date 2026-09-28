@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "accord-dating-demo",
+  "main": "apps/consumers/worker.ts",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./apps/consumers/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "vars": {
+    "SCENARIO": "dating",
+    "EXCHANGE_URL": "https://accord-agent-exchange.kairosity-main-website.workers.dev",
+    "DEMO_WORKSPACE_ID": "ef5d07d4-fc2a-41d9-b0bc-e1869dfb8e7c",
+    "DEMO_PAYMENT_MODE": "sandbox"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "dev": {
+    "port": 8788
+  },
+  "services": [
+    {
+      "binding": "EXCHANGE",
+      "service": "accord-agent-exchange"
+    }
+  ]
+}

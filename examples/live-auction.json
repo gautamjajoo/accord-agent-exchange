@@ -1,0 +1,463 @@
+{
+  "label": "Recorded live GPT auction; read-only replay",
+  "recorded_at": "2026-09-28T20:17:37.371Z",
+  "model": "gpt-5.4-mini",
+  "auction": {
+    "id": "47d875f4-3504-4bc5-999e-9e1bb506d3aa",
+    "scenario": "dating",
+    "publisher_id": "wavelength",
+    "intent": "We matched and want somewhere in SF for a casual coffee date.",
+    "preferences": [
+      "Coffee for two",
+      "San Francisco",
+      "Casual first date"
+    ],
+    "mode": "live",
+    "status": "completed",
+    "created_at": "2026-09-28T20:17:26.145Z",
+    "updated_at": "2026-09-28T20:17:37.063Z",
+    "reference_price_cents": 1600,
+    "target_score": 100,
+    "max_rounds": 5,
+    "bidders": [
+      {
+        "brand": {
+          "id": "blue-bottle",
+          "name": "Blue Bottle",
+          "initials": "BB",
+          "color": "#6faec8",
+          "scenario": "dating",
+          "item": "Ferry Building · two coffees",
+          "description": "A coffee stop at the Ferry Building in San Francisco.",
+          "base_price_cents": 1600,
+          "price_kind": "demo_quote",
+          "source_url": "https://bluebottlecoffee.com/cafes/ferry-building",
+          "source_date": "2026-09-28",
+          "facts": [
+            "Listed address: 1 Ferry Building #7, San Francisco.",
+            "Two-coffee price is a simulated quote, not a merchant menu price.",
+            "Current operating availability is not verified; source currently lists closed hours."
+          ],
+          "tags": [
+            "coffee",
+            "ferry building",
+            "waterfront",
+            "casual"
+          ],
+          "code": "BLUEBOTTLE-DEMO"
+        },
+        "campaign": {
+          "brand_id": "blue-bottle",
+          "version": 1,
+          "active": true,
+          "max_cpc_cents": 180,
+          "max_discount_cents": 200,
+          "strategy": "Premium: prioritize publisher reach with a strong CPC, protect price, and use limited discounts only when needed.",
+          "balance_cents": 10000,
+          "reserved_cents": 162,
+          "spent_cents": 0
+        },
+        "fit": {
+          "brand_id": "blue-bottle",
+          "score": 90,
+          "explanation": "Strong match for coffee for two in San Francisco and especially casual first-date vibes; the listed Ferry Building location fits the SF preference, though current availability is not verified."
+        },
+        "offer": {
+          "bid_cents": 150,
+          "discount_cents": 200
+        },
+        "finalized": true,
+        "withdrawn": false,
+        "last_action": "submit",
+        "explanation": "Blue Bottle is still the strongest casual SF coffee-date fit, so I’m improving value materially while keeping the offer economical and competitive."
+      },
+      {
+        "brand": {
+          "id": "sightglass",
+          "name": "Sightglass",
+          "initials": "SG",
+          "color": "#c8ac86",
+          "scenario": "dating",
+          "item": "SoMa flagship · two coffees",
+          "description": "A roastery and open coffee bar at the 7th Street flagship.",
+          "base_price_cents": 1600,
+          "price_kind": "demo_quote",
+          "source_url": "https://sightglasscoffee.com/pages/sightglass-san-francisco-soma",
+          "source_date": "2026-09-28",
+          "facts": [
+            "Flagship at 270 7th Street in SoMa.",
+            "Roastery and coffee preparation are visible from its open floor plan.",
+            "Two-coffee price is a simulated quote; no reservation or quietness claim."
+          ],
+          "tags": [
+            "coffee",
+            "soma",
+            "roastery",
+            "craft",
+            "casual"
+          ],
+          "code": "SIGHTGLASS-DEMO"
+        },
+        "campaign": {
+          "brand_id": "sightglass",
+          "version": 1,
+          "active": true,
+          "max_cpc_cents": 125,
+          "max_discount_cents": 650,
+          "strategy": "Flexible: preserve CPC efficiency and compete through customer savings; improve discounts when losing.",
+          "balance_cents": 10000,
+          "reserved_cents": 0,
+          "spent_cents": 0
+        },
+        "fit": {
+          "brand_id": "sightglass",
+          "score": 84,
+          "explanation": "Good fit for a casual coffee date in San Francisco, with a SoMa flagship and coffee-focused setup; it matches the coffee and SF criteria well."
+        },
+        "offer": {
+          "bid_cents": 75,
+          "discount_cents": 310
+        },
+        "finalized": true,
+        "withdrawn": false,
+        "last_action": "submit",
+        "explanation": "Improving the customer savings enough to edge up the value score while keeping the same competitive bid. This keeps Sightglass strong for a casual San Francisco coffee date."
+      },
+      {
+        "brand": {
+          "id": "ritual",
+          "name": "Ritual",
+          "initials": "R",
+          "color": "#ee6c60",
+          "scenario": "dating",
+          "item": "Mission café · two coffees",
+          "description": "Ritual’s Mission café on Valencia Street.",
+          "base_price_cents": 1600,
+          "price_kind": "demo_quote",
+          "source_url": "https://ritualcoffee.com/locations/",
+          "source_date": "2026-09-28",
+          "facts": [
+            "Mission location at 1026 Valencia Street, San Francisco.",
+            "Two-coffee price is a simulated quote.",
+            "No live seating or reservation information."
+          ],
+          "tags": [
+            "coffee",
+            "mission",
+            "valencia",
+            "neighborhood",
+            "casual"
+          ],
+          "code": "RITUAL-DEMO"
+        },
+        "campaign": {
+          "brand_id": "ritual",
+          "version": 1,
+          "active": true,
+          "max_cpc_cents": 145,
+          "max_discount_cents": 450,
+          "strategy": "Balanced: offer modest initial customer value, then respond to the leading effective price.",
+          "balance_cents": 9896,
+          "reserved_cents": 0,
+          "spent_cents": 104
+        },
+        "fit": {
+          "brand_id": "ritual",
+          "score": 82,
+          "explanation": "Good fit for a casual coffee date in San Francisco, with a Mission café on Valencia Street and a neighborhood coffee setting that suits the stated preferences."
+        },
+        "offer": {
+          "bid_cents": 45,
+          "discount_cents": 325
+        },
+        "finalized": true,
+        "withdrawn": false,
+        "last_action": "submit",
+        "explanation": "Small improvement to stay competitive while keeping the offer economical for a casual Mission coffee date. This edges up customer value without overextending."
+      }
+    ],
+    "rounds": [
+      {
+        "number": 1,
+        "started_at": "2026-09-28T20:17:29.444Z",
+        "completed_at": "2026-09-28T20:17:31.095Z",
+        "offers": [
+          {
+            "bid_cents": 45,
+            "discount_cents": 250,
+            "brand_id": "ritual",
+            "brand_name": "Ritual",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1350,
+            "fit_score": 82,
+            "price_score": 15.625,
+            "user_score": 55.449999999999996,
+            "finalized": false
+          },
+          {
+            "bid_cents": 150,
+            "discount_cents": 0,
+            "brand_id": "blue-bottle",
+            "brand_name": "Blue Bottle",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1600,
+            "fit_score": 90,
+            "price_score": 0,
+            "user_score": 54,
+            "finalized": false
+          },
+          {
+            "bid_cents": 75,
+            "discount_cents": 120,
+            "brand_id": "sightglass",
+            "brand_name": "Sightglass",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1480,
+            "fit_score": 84,
+            "price_score": 7.499999999999996,
+            "user_score": 53.4,
+            "finalized": false
+          }
+        ],
+        "actions": {
+          "blue-bottle": {
+            "action": "submit",
+            "bid_cents": 150,
+            "discount_cents": 0,
+            "final": false,
+            "explanation": "Strong fit for a casual San Francisco coffee date, so I’m opening with a competitive bid while keeping price intact."
+          },
+          "sightglass": {
+            "action": "submit",
+            "bid_cents": 75,
+            "discount_cents": 120,
+            "final": false,
+            "explanation": "Strong casual SF coffee fit; offering a modest discount and a competitive bid to stay attractive while keeping room to improve if needed."
+          },
+          "ritual": {
+            "action": "submit",
+            "bid_cents": 45,
+            "discount_cents": 250,
+            "final": false,
+            "explanation": "Opening with a modest discount while keeping room to improve if needed. This keeps the offer competitive for a casual Mission coffee date without overcommitting early."
+          }
+        },
+        "leader_id": "ritual",
+        "cash_leader_id": "blue-bottle",
+        "feedback": "Ritual leads on user value at 55.4/100, with an effective price of $13.50. Compete with better customer value; cash only breaks exact score ties.",
+        "changed": true
+      },
+      {
+        "number": 2,
+        "started_at": "2026-09-28T20:17:32.414Z",
+        "completed_at": "2026-09-28T20:17:33.798Z",
+        "offers": [
+          {
+            "bid_cents": 45,
+            "discount_cents": 300,
+            "brand_id": "ritual",
+            "brand_name": "Ritual",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1300,
+            "fit_score": 82,
+            "price_score": 18.75,
+            "user_score": 56.699999999999996,
+            "finalized": false
+          },
+          {
+            "bid_cents": 75,
+            "discount_cents": 250,
+            "brand_id": "sightglass",
+            "brand_name": "Sightglass",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1350,
+            "fit_score": 84,
+            "price_score": 15.625,
+            "user_score": 56.65,
+            "finalized": false
+          },
+          {
+            "bid_cents": 150,
+            "discount_cents": 25,
+            "brand_id": "blue-bottle",
+            "brand_name": "Blue Bottle",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1575,
+            "fit_score": 90,
+            "price_score": 1.5625,
+            "user_score": 54.625,
+            "finalized": false
+          }
+        ],
+        "actions": {
+          "blue-bottle": {
+            "action": "submit",
+            "bid_cents": 150,
+            "discount_cents": 25,
+            "final": false,
+            "explanation": "Blue Bottle remains a strong casual SF coffee-date fit, so I’m improving value modestly while keeping the offer economical."
+          },
+          "sightglass": {
+            "action": "submit",
+            "bid_cents": 75,
+            "discount_cents": 250,
+            "final": false,
+            "explanation": "Keeping the same competitive bid while improving the customer savings to strengthen the casual SF coffee offer."
+          },
+          "ritual": {
+            "action": "submit",
+            "bid_cents": 45,
+            "discount_cents": 300,
+            "final": false,
+            "explanation": "Increasing the customer discount slightly improves our effective price while staying economical. This keeps the offer competitive for a casual Mission coffee date and preserves room to respond if needed."
+          }
+        },
+        "leader_id": "ritual",
+        "cash_leader_id": "blue-bottle",
+        "feedback": "Ritual leads on user value at 56.7/100, with an effective price of $13.00. Compete with better customer value; cash only breaks exact score ties.",
+        "changed": true
+      },
+      {
+        "number": 3,
+        "started_at": "2026-09-28T20:17:35.008Z",
+        "completed_at": "2026-09-28T20:17:37.063Z",
+        "offers": [
+          {
+            "bid_cents": 150,
+            "discount_cents": 200,
+            "brand_id": "blue-bottle",
+            "brand_name": "Blue Bottle",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1400,
+            "fit_score": 90,
+            "price_score": 12.5,
+            "user_score": 59,
+            "finalized": true
+          },
+          {
+            "bid_cents": 75,
+            "discount_cents": 310,
+            "brand_id": "sightglass",
+            "brand_name": "Sightglass",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1290,
+            "fit_score": 84,
+            "price_score": 19.374999999999996,
+            "user_score": 58.15,
+            "finalized": true
+          },
+          {
+            "bid_cents": 45,
+            "discount_cents": 325,
+            "brand_id": "ritual",
+            "brand_name": "Ritual",
+            "base_price_cents": 1600,
+            "effective_price_cents": 1275,
+            "fit_score": 82,
+            "price_score": 20.3125,
+            "user_score": 57.324999999999996,
+            "finalized": true
+          }
+        ],
+        "actions": {
+          "blue-bottle": {
+            "action": "submit",
+            "bid_cents": 150,
+            "discount_cents": 200,
+            "final": true,
+            "explanation": "Blue Bottle is still the strongest casual SF coffee-date fit, so I’m improving value materially while keeping the offer economical and competitive."
+          },
+          "sightglass": {
+            "action": "submit",
+            "bid_cents": 75,
+            "discount_cents": 310,
+            "final": true,
+            "explanation": "Improving the customer savings enough to edge up the value score while keeping the same competitive bid. This keeps Sightglass strong for a casual San Francisco coffee date."
+          },
+          "ritual": {
+            "action": "submit",
+            "bid_cents": 45,
+            "discount_cents": 325,
+            "final": true,
+            "explanation": "Small improvement to stay competitive while keeping the offer economical for a casual Mission coffee date. This edges up customer value without overextending."
+          }
+        },
+        "leader_id": "blue-bottle",
+        "cash_leader_id": "blue-bottle",
+        "feedback": "Blue Bottle leads on user value at 59.0/100, with an effective price of $14.00. Compete with better customer value; cash only breaks exact score ties.",
+        "changed": true
+      }
+    ],
+    "current_round": 3,
+    "pause_requested": false,
+    "events": [
+      {
+        "at": "2026-09-28T20:17:26.145Z",
+        "message": "Opportunity received. Assessing fit before seeing bids.",
+        "kind": "created"
+      },
+      {
+        "at": "2026-09-28T20:17:28.235Z",
+        "message": "Personal fit frozen. The first sealed offer round can begin.",
+        "kind": "assessed"
+      },
+      {
+        "at": "2026-09-28T20:17:31.095Z",
+        "kind": "round",
+        "message": "Round 1 sealed. Ritual leads."
+      },
+      {
+        "at": "2026-09-28T20:17:33.798Z",
+        "kind": "round",
+        "message": "Round 2 sealed. Ritual leads."
+      },
+      {
+        "at": "2026-09-28T20:17:37.063Z",
+        "kind": "round",
+        "message": "Round 3 sealed. Blue Bottle leads."
+      },
+      {
+        "at": "2026-09-28T20:17:37.063Z",
+        "kind": "ended",
+        "message": "Auction ended: all final."
+      }
+    ],
+    "payment_mode": "simulation",
+    "end_reason": "all_final",
+    "winner": {
+      "bid_cents": 150,
+      "discount_cents": 200,
+      "brand_id": "blue-bottle",
+      "brand_name": "Blue Bottle",
+      "base_price_cents": 1600,
+      "effective_price_cents": 1400,
+      "fit_score": 90,
+      "price_score": 12.5,
+      "user_score": 59,
+      "finalized": true
+    },
+    "placement": {
+      "id": "a93cf0ec-72b2-4ded-8fd6-d743434f56d7",
+      "auction_id": "47d875f4-3504-4bc5-999e-9e1bb506d3aa",
+      "publisher_id": "wavelength",
+      "brand_id": "blue-bottle",
+      "offer": {
+        "bid_cents": 150,
+        "discount_cents": 200,
+        "brand_id": "blue-bottle",
+        "brand_name": "Blue Bottle",
+        "base_price_cents": 1600,
+        "effective_price_cents": 1400,
+        "fit_score": 90,
+        "price_score": 12.5,
+        "user_score": 59,
+        "finalized": true
+      },
+      "item": "Ferry Building · two coffees",
+      "code": "BLUEBOTTLE-DEMO",
+      "destination": "https://bluebottlecoffee.com/cafes/ferry-building",
+      "expires_at": "2026-09-28T20:27:37.063Z",
+      "status": "reserved"
+    }
+  }
+}
