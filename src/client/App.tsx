@@ -3,6 +3,7 @@ import { AnimatePresence, LayoutGroup, MotionConfig, motion, useReducedMotion } 
 import { AnimatedValue } from './AuctionMotion';
 import { LiveOperations } from './LiveOperations';
 import PaymentReceipt from './PaymentReceipt';
+import ExternalBrands from './ExternalBrands';
 import { ArrowUpRight, ArrowRight, Check, ChevronDown, CircleHelp, Coffee, Compass, ExternalLink, Heart, Layers3, Play, Pause, Plus, RotateCcw, Settings2, ShieldCheck, ShoppingBag, Sparkles, Square, X, Zap } from 'lucide-react';
 import type { Auction, Bootstrap, Brand, Campaign, LedgerEntry, RankedOffer, ScenarioId } from '../shared/types';
 
@@ -80,7 +81,7 @@ export default function App() {
     return()=>{stopped=true;clearInterval(timer);};
   },[]);
   const s = data?.scenarios.find(x=>x.id===scenario);
-  const brands = data?.brands.filter(b=>b.scenario===scenario) || [];
+  const brands = auction?.bidders.map(b=>b.brand) || data?.brands.filter(b=>b.scenario===scenario) || [];
   const latest = auction?.rounds.at(-1);
   const round = replay ? auction?.rounds[replayRound] : latest;
   const leader = round?.offers.find(o=>o.brand_id===round.leader_id);
@@ -129,7 +130,7 @@ export default function App() {
           </section>
         </div>
       </>}
-      {tab==='studio'&&<section className="studio"><div className="studio-intro"><p>Nine researched brand templates. Catalog facts with configurable test campaigns.</p><span>Changes apply to new auctions.</span></div><div className="studio-grid">{data.brands.map(b=><CampaignCard key={b.id} brand={b} campaign={data.campaigns.find(c=>c.brand_id===b.id)!} stripe={data.capabilities.stripe} onRefresh={refresh} onError={setError}/>)}</div></section>}
+      {tab==='studio'&&<section className="studio"><ExternalBrands request={api} onChanged={refresh}/><div className="studio-intro"><p>Managed templates and invited external agents. Catalog facts with configurable test campaigns.</p><span>Changes apply to new auctions.</span></div><div className="studio-grid">{data.brands.map(b=><CampaignCard key={b.id} brand={b} campaign={data.campaigns.find(c=>c.brand_id===b.id)!} stripe={data.capabilities.stripe} onRefresh={refresh} onError={setError}/>)}</div></section>}
       {tab==='ledger'&&<Ledger ledger={data.ledger} brands={data.brands} stripe={data.capabilities.stripe}/>}
       <footer><span className="footer-brand"><AccordMark/>accord</span><p>Test campaigns use real brand references and fictional offers. No merchant affiliation or coupon redemption.</p><span>Built for agent commerce.</span></footer>
       </>}

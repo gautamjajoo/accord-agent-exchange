@@ -1,17 +1,17 @@
 import { brands, scenarios } from './catalog';
-import type { AgentAction, AgentMode, Auction, Bidder, Campaign, EndReason, Fit, RankedOffer, ScenarioId } from './types';
+import type { AgentAction, AgentMode, Auction, Bidder, Brand, Campaign, EndReason, Fit, RankedOffer, ScenarioId } from './types';
 
 const terminal = (a:Auction) => ['completed','cancelled','failed'].includes(a.status);
 const time = (now?:string|number|Date) => new Date(now ?? Date.now()).toISOString();
 const clone = <T>(value:T):T => structuredClone(value);
 
-export function createAuction(input:{id:string;scenario:ScenarioId;intent:string;preferences:string[];mode:AgentMode;campaigns:Campaign[];now?:string|number|Date;target_score?:number;max_rounds?:number}):Auction {
+export function createAuction(input:{id:string;scenario:ScenarioId;intent:string;preferences:string[];mode:AgentMode;campaigns:Campaign[];catalog?:Brand[];now?:string|number|Date;target_score?:number;max_rounds?:number}):Auction {
   const scenario = scenarios.find(s => s.id === input.scenario);
   if (!scenario) throw new Error('Unknown scenario');
   const max = input.max_rounds ?? 5, target = input.target_score ?? 85;
   if (!Number.isInteger(max) || max < 1 || max > 5) throw new Error('max_rounds must be an integer from 1 to 5');
   if (!Number.isFinite(target) || target < 0 || target > 100) throw new Error('target_score must be from 0 to 100');
-  const selected = brands.filter(b => scenario.brand_ids.includes(b.id)).flatMap(brand => {
+  const selected = (input.catalog??brands).filter(b => b.scenario===scenario.id).flatMap(brand => {
     const campaign = input.campaigns.find(c => c.brand_id === brand.id && c.active);
     return campaign ? [{brand:clone(brand),campaign:clone(campaign),fit:{brand_id:brand.id,score:0,explanation:'Awaiting user-agent assessment.'},offer:null,finalized:false,withdrawn:false,last_action:'waiting',explanation:'Waiting for the auction to begin.'} satisfies Bidder] : [];
   });

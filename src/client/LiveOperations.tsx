@@ -11,8 +11,8 @@ function AgentTerminal({ bidder, auction, replay }: { bidder: Bidder; auction: A
   const viewport = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const traces = (auction.trace || []).filter(t => t.actor === bidder.brand.id);
-  const lastRequest = [...traces].reverse().find(t => t.kind === 'model.request');
-  const waiting = !replay && auction.status === 'running' && !!lastRequest && !traces.some(t => t.correlation_id === lastRequest.correlation_id && t.kind !== 'model.request');
+  const lastRequest = [...traces].reverse().find(t => t.kind === 'model.request'||t.kind==='agent.opportunity');
+  const waiting = !replay && auction.status === 'running' && !bidder.finalized&&!bidder.withdrawn&&!!lastRequest && !traces.some(t => t.correlation_id === lastRequest.correlation_id && t.id!==lastRequest.id);
   const rounds = auction.rounds.filter(r => r.actions[bidder.brand.id]);
   const lastAction = rounds.at(-1)?.actions[bidder.brand.id];
   const timeline: ({ at: string; id: string; trace: AuditTrace; round?: never } | { at: string; id: string; round: Round; trace?: never })[] = [...traces.map(trace => ({ at: trace.at, id: trace.id, trace })), ...rounds.map(round => ({ at: round.completed_at, id: `round:${round.number}`, round }))];
@@ -20,10 +20,10 @@ function AgentTerminal({ bidder, auction, replay }: { bidder: Bidder; auction: A
   const state = bidder.withdrawn ? 'withdrawn' : bidder.finalized ? 'final' : waiting ? 'request in flight' : auction.status === 'assessing' ? 'awaiting fit' : auction.status === 'running' ? 'connected' : 'idle';
   useEffect(() => { if (stick.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [traces.length, rounds.length, waiting]);
   return <section className={`agent-terminal ${waiting ? 'is-busy' : ''}`} aria-label={`${bidder.brand.name} agent terminal`}>
-    <header><span className="agent-terminal-name"><Terminal size={13}/>{bidder.brand.id}</span><span className={`terminal-state ${waiting ? 'pending' : ''}`}><i/>{state}</span></header>
+    <header><span className="agent-terminal-name"><Terminal size={13}/>{bidder.campaign.agent_kind==='external'?bidder.brand.name:bidder.brand.id}</span><span className={`terminal-state ${waiting ? 'pending' : ''}`}><i/>{state}</span></header>
     <div className="terminal-session"><span>agent/{bidder.brand.id}</span><span>USD · CPC</span></div>
     <div ref={viewport} className="terminal-output" onScroll={e => { const v = e.currentTarget; stick.current = v.scrollHeight - v.scrollTop - v.clientHeight < 30; }} tabIndex={0} aria-label={`${bidder.brand.name} execution log`}>
-      <div className="terminal-line terminal-muted"><span>session</span><p>{auction.id.slice(0, 8)} / {auction.mode === 'live' ? 'OpenAI Responses API' : 'Scripted simulation'}</p></div>
+      <div className="terminal-line terminal-muted"><span>session</span><p>{auction.id.slice(0, 8)} / {auction.mode!=='live'?'Scripted simulation':bidder.campaign.agent_kind==='external'?'External brand agent API':'OpenAI Responses API'}</p></div>
       {auction.status !== 'assessing' && <div className="terminal-line"><span>fit</span><p><b>{bidder.fit.score}/100</b> frozen before bidding</p></div>}
       {traces.length === 0 && rounds.length > 0 && <div className="terminal-line terminal-muted"><span>archive</span><p>Committed decisions. Transport capture was not enabled for this run.</p></div>}
       {timeline.map(entry => {

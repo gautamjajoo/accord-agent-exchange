@@ -57,6 +57,18 @@ export default {
         }
         return json({error:'Method not allowed'},405);
       }
+      if(path.startsWith('/v1/brand-agent/')){
+        const workspaceId=request.headers.get('x-workspace-id');
+        const authorization=request.headers.get('authorization');
+        if(!workspaceId||![ownerWorkspace,env.DEMO_WORKSPACE_ID].includes(workspaceId)||!authorization?.startsWith('Bearer '))return json({error:'Agent authentication required'},401);
+        const token=authorization.slice(7),workspace=env.EXCHANGE.getByName(workspaceId);
+        try{
+          if(path==='/v1/brand-agent/status'&&request.method==='GET')return json(await workspace.brandAgentStatus(token));
+          if(path==='/v1/brand-agent/opportunities'&&request.method==='GET')return json(await workspace.brandAgentOpportunities(token));
+          if(path==='/v1/brand-agent/actions'&&request.method==='POST')return json(await workspace.submitBrandAgentAction(token,await body(request)));
+          return json({error:'Agent route not found'},404);
+        }catch(e){const error=e instanceof Error?e.message:'Agent request failed';return json({error},error.includes('authentication')?401:error.includes('closed')||error.includes('stale')||error.includes('already has')?409:400);}
+      }
       const publisher=await publisherIdentity(request,env);
       const publisherAuth=!!publisher;
       const ownsPublisher=(publisherId:string)=>operatorAuth||publisher==='*'||publisher===publisherId;
@@ -76,6 +88,7 @@ export default {
       const reply=json;
       const visibleAuction=(auction:Auction)=>operatorAuth?auction:publisherAuction(auction);
       if(request.method==='GET') {
+        if(path==='/v1/brand-agents'){if(!operatorAuth)return reply({error:'Authentication required'},401);return reply(await workspace.listBrandAgents());}
         if(path==='/api/bootstrap'){
           const data=await workspace.bootstrap();
           const consumers=local?{dating:'http://localhost:8788',fashion:'http://localhost:8789',outings:'http://localhost:8790'}:{dating:'https://accord-dating-demo.kairosity-main-website.workers.dev',fashion:'https://accord-shopping-demo.kairosity-main-website.workers.dev',outings:'https://accord-outings-demo.kairosity-main-website.workers.dev'};
@@ -88,6 +101,9 @@ export default {
         if(match){const auction=await workspace.readAuction(match[1]);if(!ownsPublisher(auction.publisher_id))return reply({error:'Auction not found'},404);return reply(visibleAuction(auction));}
       }
       if(request.method==='POST') {
+        if(path==='/v1/brand-agents'){if(!operatorAuth)return reply({error:'Authentication required'},401);return reply({...await workspace.registerBrandAgent(await body(request)),workspace_id:workspaceId},201);}
+        const revoke=path.match(/^\/v1\/brand-agents\/(brand-[a-f0-9-]+)\/revoke$/);
+        if(revoke){if(!operatorAuth)return reply({error:'Authentication required'},401);return reply(await workspace.revokeBrandAgent(revoke[1]));}
         const match=path.match(/^\/api\/demo\/(dating|fashion|outings)\/auctions$/);
         if(match||path==='/v1/auctions') {
           const input=await body(request);
@@ -113,7 +129,7 @@ export default {
         const funding=path.match(/^\/v1\/campaigns\/([a-z0-9-]+)\/fund$/);
         if(funding){
           if(!operatorAuth)return reply({error:'Authentication required'},401);
-          if(!brands.some(b=>b.id===funding[1]))throw new Error('Unknown brand');
+          if(!brands.some(b=>b.id===funding[1])&&!await workspace.hasBrand(funding[1]))throw new Error('Unknown brand');
           return reply(await createFundingCheckout(env.STRIPE_SECRET_KEY,{brandId:funding[1],amountCents:Number((await body(request)).amount_cents??10000),origin:url.origin,workspaceId}));
         }
         const simulation=path.match(/^\/api\/simulation\/fund\/([a-z0-9-]+)$/);

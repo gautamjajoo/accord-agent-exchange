@@ -1,111 +1,179 @@
-# Accord — an agent exchange
+# Accord
 
-Brands compete with an advertising bid **and a customer discount**. A user agent chooses on fit and effective price. A brand can lose the cash auction and win the recommendation.
+### The agent exchange where brands compete to give AI users better deals.
 
-This is an independent hackathon project. Real brand/catalog references are combined with fictional campaigns, quotes, discounts, and consumer integrations. Nothing here creates a redeemable coupon or a merchant booking.
+Consumer AI apps are becoming a place where people decide what to buy and where to go. Accord connects those moments of intent to brand agents that negotiate two things: **what they pay the publisher and what they give the customer**.
 
-## Four independent servers
+Each brand submits `{ bid, discount }`. A user agent assesses personal fit before bidding begins; the exchange chooses using that fit and the price after discount. **A brand can lose the cash auction and win the recommendation.**
 
-| App | Deployed demo | Local server |
+[Open the exchange](https://accord-agent-exchange.kairosity-main-website.workers.dev/) · [Try the café flow](https://accord-dating-demo.kairosity-main-website.workers.dev/) · [Invite an external brand](docs/EXTERNAL-AGENTS.md) · [Final-round playbook](docs/FINAL-ROUND.md) · [Run locally](docs/SETUP.md)
+
+![Accord operator console with three brand-agent execution streams](docs/assets/exchange-terminal.png)
+
+*An actual persisted GPT negotiation in the deployed operator console, captured September 28, 2026. This screenshot shows the hosted agents. The exchange also accepts offers from invited brand agents running independently outside the exchange.*
+
+## See it work
+
+1. Open the dating app and select **New chat → Find a café for us**.
+2. Follow **Open exchange** to inspect that exact request. The console requires an operator session; the consumer apps are publicly accessible examples.
+3. Watch **Agent terminals** as the brand agents respond. Open **Network trace** to inspect redacted payloads, response timing, and validation events.
+4. Compare the **Public offer board** and **highest cash bid versus user-value winner**. Live rounds use 10-second sealed windows, up to five rounds, with early completion.
+5. Return to the consumer tab: the actual selected offer and illustrative code arrive automatically.
+6. Click the merchant button within ten minutes. Inspect the exchange receipt for the CPC charge, publisher earnings, and Stripe sandbox transfer status.
+
+The example integration workspace is explicit: follow the consumer's **Open exchange** link. Opening the exchange root signs an operator into their configured private workspace instead. A page refresh does not restart the auction.
+
+## One exchange, three independently deployed apps
+
+| Surface | Request | Competing brand agents |
 |---|---|---|
-| Accord exchange | [Open exchange](https://accord-agent-exchange.kairosity-main-website.workers.dev) | http://127.0.0.1:8787 |
-| Wavelength-inspired dating | [Open dating app](https://accord-dating-demo.kairosity-main-website.workers.dev) | http://127.0.0.1:8788 |
-| Thread shopping | [Open Thread](https://accord-shopping-demo.kairosity-main-website.workers.dev) | http://127.0.0.1:8789 |
-| Roam outings | [Open Roam](https://accord-outings-demo.kairosity-main-website.workers.dev) | http://127.0.0.1:8790 |
+| [Accord](https://accord-agent-exchange.kairosity-main-website.workers.dev/) | Operator console, campaigns, execution traces, ledger | All scenarios |
+| [Wavelength-inspired dating](https://accord-dating-demo.kairosity-main-website.workers.dev/) | A casual coffee date in San Francisco | Blue Bottle, Sightglass, Ritual |
+| [Thread](https://accord-shopping-demo.kairosity-main-website.workers.dev/) | Everyday women's sneakers | Allbirds, Rothy's, Everlane |
+| [Roam](https://accord-outings-demo.kairosity-main-website.workers.dev/) | An outing with art and hands-on science | Exploratorium, California Academy of Sciences, SFMOMA |
 
-Each app has its own Cloudflare Worker. The three consumer servers send authenticated recommendation requests to the exchange, then return the actual winner to their chat interfaces. They share consumer UI code but use distinct scenario configuration and publisher attribution. The exchange owns one SQLite Durable Object per workspace for auction state, campaign snapshots, and accounting.
+The consumer apps share UI code but run as separate Workers, with separate publisher credentials and attribution. They use the same auction and accounting implementation.
 
-The configured `DEMO_WORKSPACE_ID` joins all four apps to the same presentation stage. The exchange automatically joins that stage and observes incoming requests once a second; each consumer's **Open exchange** link also carries its stage ID. No auction is restarted by a browser refresh. Model requests and publisher credentials stay on the servers.
+## What Accord owns
 
-## Run locally
+- **Personalization:** a bid-blind fit assessment, frozen for each request.
+- **Negotiation:** simultaneous brand turns against the same previous completed offer board, with private campaign limits.
+- **Selection:** transparent scoring, amount validation, early acceptance, and a frozen winner.
+- **Attribution and transactions:** CPC reservation, duplicate-safe click accounting, publisher credits, and retryable settlement.
+- **Operations:** authenticated console access, campaign versions, persistent state, and inspectable execution records.
+- **External participation:** invite-only brand registration, scoped credentials, private bidding opportunities, and authenticated offer submission from a merchant-owned process.
 
-Use Node 22.12+ (Node 24 recommended).
+Consumer interfaces and brand templates are reference integrations around that exchange. GPT decides fit and hosted commercial actions; invited external agents can make their own decisions and submit through the same protocol. Deterministic application code validates actions, ranks offers, and moves accounting state.
+
+## Connect an external brand agent
+
+An operator can now invite a new brand through **Campaigns → Invite brand agent**. Registration creates a catalog entry and inactive, unfunded campaign, then issues a token scoped to that brand and workspace. Fund and activate the campaign before starting a fresh auction. For traffic from the three consumer apps, register it in their shared integration workspace.
+
+The merchant runs [the reference client](scripts/external-brand-agent.mjs) on its own machine with its own `OPENAI_API_KEY`. The client polls for its turns, sees its own private policy and the previous completed public board, chooses an action, and sends it to the deployed exchange. The operator can revoke access. There is no hosted-agent fallback for an absent external bidder.
 
 ```sh
-npm install
-cp .dev.vars.example .dev.vars # only on first setup; preserve existing secrets
+# Environment contains the invitation token, workspace ID, and merchant's model key.
+node scripts/external-brand-agent.mjs --once  # Access check; no bidding
+node scripts/external-brand-agent.mjs         # Live GPT decisions and real API offers
+```
+
+[Deployed external-agent verification](docs/EXTERNAL-AGENT-VERIFICATION.md) records an accepted live GPT offer from a separate process, consumer attribution, and credential revocation. [External-agent setup and API contract](docs/EXTERNAL-AGENTS.md) covers credentials, funding, deadlines, and retries. `--rules` is a separately labeled deterministic test mode. This is an implemented invitation path, not a claim that a third-party merchant has joined: **no independent merchant pilot has been validated yet**, and payments remain in Stripe test mode.
+
+## The mechanism
+
+```ts
+type Offer = {
+  bid_cents: number;       // What the advertiser pays for the first click
+  discount_cents: number;  // Flat reduction in the customer's quoted price
+};
+```
+
+All amounts are integer USD cents. The item, base price, catalog facts, campaign version, and fit assessment are frozen at auction creation/assessment.
+
+```text
+effective_price = base_price − discount
+reference_price = highest initial base price
+price_score     = 100 × (1 − effective_price / reference_price)
+user_score      = 0.60 × fit_score + 0.40 × price_score
+```
+
+The highest user score wins. Exact ties favor the higher advertising bid, then stable brand ID. The reference price stays fixed across rounds. The 60/40 split is an explicit initial policy, not a claim of optimal auction economics.
+
+| Action | Contract |
+|---|---|
+| Submit/revise | Increase either amount or both; never reduce a prior valid amount |
+| Hold | Keep the offer and remain available for later turns |
+| Finalize | Keep the offer eligible; receive no further bidding turns |
+| Withdraw | Permanently remove the offer from selection |
+
+Round one counts toward the five-round cap. Timeouts and invalid actions retain the previous valid offer. Acceptance during a later round commits the last completed board and discards late changes. Auctions record an explicit ending reason, including acceptance, satisfaction target, all final, no change, maximum rounds, or no offers.
+
+**Economic boundary:** CPC only breaks ties, so a rational brand can offer very little cash. One-cent bids have occurred. A publisher reserve price or fixed placement fee is a planned policy experiment; neither is implemented today. Customer discounts are illustrative and do not create a cashback liability.
+
+## A verified outcome
+
+In a recorded live GPT café auction, three separately funded brands competed:
+
+| Brand | CPC offered | Customer discount | Customer price | User score |
+|---|---:|---:|---:|---:|
+| **Ritual — selected** | **$0.90** | **$4.50** | **$11.50** | **60.450** |
+| Sightglass | $0.90 | $5.21 | $10.79 | 60.425 |
+| Blue Bottle | $1.80 | $2.00 | $14.00 | 55.400 |
+
+Ritual won with half the highest advertising bid. Its first click produced one **$0.90 charge**, **$0.72 publisher credit**, and **$0.18 network gross**, followed by a verified Stripe test transfer. A repeated click returned the same accounting entry.
+
+This is a historical outcome, not a prescribed winner or a promise about the next run. [Payment verification](docs/STRIPE-VERIFICATION.md) records separate café, shopping, and outing transfers. Runtime artifacts are local and ignored; the document distinguishes observed results from test coverage.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  D[Dating Worker] -->|Publisher request| X[Exchange Worker API]
+  S[Shopping Worker] -->|Publisher request| X
+  O[Outings Worker] -->|Publisher request| X
+  C[Operator console] -->|Signed session / polling| X
+  E[External brand-owned process] <-->|Scoped opportunities / sealed offers| X
+  E <-->|Merchant-owned model key| M[Brand model provider]
+  X --> W[SQLite Durable Object per workspace]
+  W <-->|Fit and structured actions| G[GPT user and brand agents]
+  W -->|Selected offer| X
+  X -->|Result| D
+  X -->|Result| S
+  X -->|Result| O
+  W -->|Settlement job| P[Stripe Connect sandbox]
+  P -->|Signed funding events| X
+```
+
+React, TypeScript, Vite, and Motion power the interfaces. Cloudflare Workers route requests; a SQLite-backed Durable Object coordinates persisted rounds, campaigns, reservations, the ledger, and settlement jobs. Model requests run concurrently outside storage transactions. Alarms resume work from persisted deadlines. The console polls once a second; it is an observer, not the auction runner.
+
+Hosted brand agents execute as independent GPT model turns with private policies. Invited external agents execute in a separate merchant-owned process and submit via the brand-agent API; the provided client uses GPT, matching this project's chosen model stack. The console and optional [read-only CLI subscribers](docs/TERMINALS.md) observe exchange events, while the [external bidding client](scripts/external-brand-agent.mjs) actually submits actions. External model calls stay on the merchant's machine; the exchange records opportunities and submitted actions, not invented provider traces. Provider responses and external submissions remain provisional until validation and round commitment. Credentials and private campaign limits are excluded from public traces; publisher responses exclude traces and private campaign state entirely.
+
+## Payments and access
+
+Selection reserves the winning CPC for ten minutes. Displaying a recommendation does not charge the advertiser. The first click records the debit, 80/20 publisher/network split, and settlement job together. Expired reservations release funds; duplicate clicks, funding events, and transfer retries do not duplicate the charge. Processing fees are recorded separately. A connected-account transfer is not a bank payout.
+
+Remote console access uses a signed, HttpOnly, Secure, SameSite=Strict session lasting eight hours. A configured owner workspace remains separate from the example integration workspace. Each of the three publisher keys is restricted to its publisher and the integration workspace. This is founder/operator access, not a self-service multi-tenant account system.
+
+## Development
+
+Use Node.js 24. See [setup and deployment](docs/SETUP.md) for required credentials, workspace configuration, and the four-server workflow.
+
+```sh
+npm ci
+# First setup only: copy .dev.vars.example to .dev.vars and configure it.
 npm run build:all
 npm run dev:all
 ```
 
-Before starting, set `OPENAI_API_KEY` and a nonempty `PUBLISHER_API_KEY` in the ignored root `.dev.vars`. Add `ADMIN_TOKEN` for deployed exchange controls. `dev:all` starts all four ports listed above and creates ignored local consumer configuration with the publisher credential copied as `EXCHANGE_API_KEY`. It points the consumer servers at the local exchange; it does not send those requests to the deployed exchange. Stop all four with Ctrl-C. Local consumer apps use live GPT agents with explicitly simulated funds by default, independently of the deployed Stripe configuration. To use Stripe locally after configuring and funding the local workspace, start with `LOCAL_PAYMENT_MODE=sandbox npm run dev:all`.
-
-For exchange-only development, `npm run build` followed by `npm run preview` starts port 8787. For exchange frontend hot reload, run `npm run dev` in another terminal and open http://localhost:5173; its API calls proxy to that Worker. Use `build:all` after changing consumer UI assets.
-
-`OPENAI_API_KEY` enables live GPT agents. `OPENAI_MODEL` is configured in `wrangler.jsonc` (currently `gpt-5.4-mini`). The separate consumer apps request live agents and fail visibly if they are unavailable. For offline rehearsal, use the exchange's **Start test request** control and choose the explicitly labeled rule-based simulation, or use a read-only recording. Simulation never pretends to be a live model response.
-
-## The demo
-
-1. Open the separate dating app, enter a coffee-date request in its conversation, and send it.
-2. Follow **Open exchange**. The request appears automatically with its originating publisher; fit assessments happen before bids and remain fixed.
-3. Watch live GPT agents negotiate for up to five rounds. All brands see the same previous completed board. Private budgets and ceilings stay private to each brand agent.
-4. Compare the highest cash bidder with the best user-value offer. Inspect fit, price, and combined scores separately.
-5. Pause between rounds, continue, accept the current best, or cancel. Acceptance uses the last completed round even if the next one is running.
-6. Return to the dating app. Its actual winning recommendation arrives automatically with the negotiated price and demo code. Click it: the reserved CPC becomes one charge, with an 80/20 publisher/network split.
-7. Briefly show Thread and Roam sending requests through the same exchange. Use **Auction history** to replay completed auctions without changing money or live state.
-
-Consumer apps show natural recommendations inside an overall labeled demo environment. Their connection to this exchange is implemented; they are concept demos, not integrations with the real Wavelength product or featured merchants. The project has no affiliation with those brands. See [docs/DEMO.md](docs/DEMO.md) for the three-minute judges walkthrough and recorded numerical example.
-
-## Auction contract
-
-Amounts are integer USD cents. The item and base price are frozen. `effective_price = base_price - discount`. The reference price is the highest initial base price and never changes. `price_score = 100 * (1 - effective_price/reference_price)`. `user_score = 0.60 * fit + 0.40 * price_score`.
-
-Advertising bid breaks exact score ties only, followed by stable brand ID. Offers can increase both amounts or hold, finalize, or withdraw. A finalized offer remains eligible. A withdrawn agent cannot rejoin. Invalid/late actions cannot replace a valid prior offer. Each simultaneous bidding round has a ten-second deadline; round one counts toward the five-round maximum.
-
-Ending conditions are recorded explicitly: user acceptance, target score (default 85), all final, unchanged revision round, maximum rounds, no offers, cancellation, assessment failure, or insufficient funds. There is no separate inventory, fraud, coupon redemption, or stacking engine.
-
-## Money modes
-
-Live GPT and payment mode are independent. All three deployed consumers use **live GPT with Stripe sandbox funds** in the shared presentation stage. All nine campaigns have verified Checkout funding, and each publisher has completed an actual sandbox transfer. Each new workspace has $100 of simulated funds per brand; rule-based simulations always use those balances. Sandbox balances start at zero and receive credit only from verified Stripe payment success.
-
-The exchange's test-request composer has separate agent and payment selectors. Consumer payment modes are configured in the corresponding Wrangler file. Dating, fashion, and outings are deployed with `DEMO_PAYMENT_MODE=sandbox`; their publisher transfer capabilities are active.
-
-At selection the exchange reserves the winning CPC for ten minutes. The first click charges it atomically with publisher earnings and a durable settlement job. Duplicate clicks cannot charge twice. Expired reservations are released. Funding is deduplicated by webhook event and source charge; transfers use stable idempotency keys and retry without repeating the click charge. Processing fees are separate. Customer discounts do not create a cashback liability.
-
-See [README-STRIPE.md](README-STRIPE.md) for Connect, Checkout, webhook, and test-card setup, and [docs/STRIPE-VERIFICATION.md](docs/STRIPE-VERIFICATION.md) for completed consumer sandbox flows. The café run records Ritual beating a higher cash bidder, a $0.90 click, and a $0.72 publisher transfer; the fashion run records a $0.80 Rothy’s click and a $0.64 publisher transfer. New workspaces still require funding.
-
-## Deploy to Cloudflare
-
-```sh
-npx wrangler login
-npm run deploy
-node scripts/deploy-secrets.mjs
-npm run deploy:consumers
-node scripts/deploy-secrets.mjs --publishers
-```
-
-This deploys the dedicated `accord-agent-exchange` Worker and SQLite Durable Object namespace, then the three separate consumer Workers. It does not use Darwin Arena resources. Before deploying to another account, update each consumer's `EXCHANGE_URL` and use the same `DEMO_WORKSPACE_ID` in all four Wrangler configurations.
-
-`deploy-secrets.mjs` reads the ignored `.dev.vars` and sends nonempty exchange credentials to Wrangler over standard input. Its `--publishers` option instead uploads only the publisher credential to each consumer Worker as `EXCHANGE_API_KEY`. Never put model, Stripe, admin, or publisher secrets in browser variables or checked-in configuration.
-
-Remote exchange mutations require `ADMIN_TOKEN`; enter it in **Connection settings** to control auctions or campaigns. Local development allows localhost. Outside the shared presentation stage, browsers use HTTP-only workspace cookies. Consumer servers authenticate to the exchange with `Authorization: Bearer <PUBLISHER_API_KEY>` and their configured UUID `X-Workspace-ID`. The consumer browser calls its own server and never receives the publisher secret.
-
-After deployment, register `/v1/stripe/webhook` as a Stripe sandbox webhook endpoint for `checkout.session.completed` and `charge.updated`, save its signing secret, and run the secrets upload again. The local Stripe CLI listener has a different signing secret from the deployed endpoint.
-
-## API
-
-| Route | Purpose |
+| Local surface | URL |
 |---|---|
-| `GET /api/bootstrap` | Catalog, templates, capabilities, current workspace |
-| `POST /api/demo/:scenario/auctions` | Simulated consumer adapter with server-controlled publisher identity |
-| `POST /v1/auctions` | Authenticated publisher auction API |
-| `GET /v1/auctions/:id` | Persisted auction and completed rounds |
-| `POST /v1/auctions/:id/actions` | `accept`, `cancel`, `pause`, `continue` |
-| `POST /v1/placements/:id/click` | Idempotent CPC charge and merchant destination |
-| `PATCH /v1/campaigns/:brandId` | Versioned campaign configuration |
-| `POST /v1/campaigns/:brandId/fund` | Sandbox Checkout |
-| `POST /api/simulation/fund/:brandId` | Explicitly simulated funds |
-| `POST /v1/stripe/webhook` | Verified advertiser funding |
-| `GET /v1/ledger` | Funding, click, fee, transfer receipts |
-
-Each consumer Worker provides `GET /api/context`, `POST /api/auctions`, `GET /api/auctions/:id`, and `POST /api/placements/:id/click`. Its scenario and publisher identity are server-controlled. It returns the consumer-facing auction result and checks scenario ownership before reads or clicks; the exchange remains the sole auction/accounting implementation.
-
-## Verification
+| Exchange | http://127.0.0.1:8787 |
+| Dating | http://127.0.0.1:8788 |
+| Shopping | http://127.0.0.1:8789 |
+| Outings | http://127.0.0.1:8790 |
 
 ```sh
 npm run typecheck
 npm test
+node --test tests/external-agent-client.node-test.mjs
 npm run build:all
 ```
 
-Unit tests cover scoring, round limits, negotiation actions, invalid amounts, deadline behavior, model-output validation, Stripe verification, transaction idempotency, and consumer adapter attribution. Runtime checks exercise the same Durable Object API used by the interface. Source links and inspected dates are retained in `src/shared/catalog.ts`; shoe sizes and live venue/ticket availability remain unverified.
+**327 Vitest tests and 7 native Node client tests pass**, including scoring, sealed windows, early acceptance, restart recovery, structured model-output validation, publisher and external-brand isolation, signed sessions, credential revocation, and payment/submission idempotency. External model and Stripe results are documented separately from these automated tests.
+
+## Current scope
+
+The deployed exchange executes real model decisions, persistent state transitions, and Stripe **test-mode** transactions. The consumer apps are reference implementations. Built-in brand identities and sourced catalog facts are real; their campaigns, discounts, marked quotes, and merchant integrations are illustrative. External brand registration accepts operator-reviewed, merchant-supplied catalog data; it does not independently verify ownership or facts. There is no claimed merchant affiliation or redeemable coupon, and no third-party merchant pilot has been validated.
+
+Live-money payments, merchant-authorized promotions, redemption, production abuse controls, individual accounts, broader publisher onboarding, and measured production latency/economics remain work ahead. Full 10-second live rounds currently favor observability over speed. We do not claim those gaps are solved by deploying the product.
+
+## Explore
+
+- [Final-round presentation, improvement priorities, and judge questions](docs/FINAL-ROUND.md)
+- [Local setup, deployment, authentication, and API reference](docs/SETUP.md)
+- [90-second recording script](docs/RECORDING-SCRIPT.md)
+- [Invite and run an external brand agent](docs/EXTERNAL-AGENTS.md)
+- [Three live terminal subscribers](docs/TERMINALS.md)
+- [Stripe setup](README-STRIPE.md) and [verified settlement results](docs/STRIPE-VERIFICATION.md)
+- [Catalog research and source links](docs/SOURCES.md)
+- [Historical acceptance audit](docs/ACCEPTANCE.md) — dated evidence; the UI/auth description predates the terminal redesign

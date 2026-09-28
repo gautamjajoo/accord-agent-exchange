@@ -1,9 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import { brands, scenarios, createCampaigns } from '../shared/catalog';
 import { createAuction, assignFits, applyRound, finishAuction, rankOffers, assessSimulatedFits, simulateAgentAction } from '../shared/engine';
-import type { Auction, AgentAction, AuditTrace, Bootstrap, Campaign, LedgerEntry, Placement, ScenarioId, TraceJSON } from '../shared/types';
+import type { Auction, AgentAction, AuditTrace, Bootstrap, Brand, Campaign, LedgerEntry, Placement, ScenarioId, TraceJSON } from '../shared/types';
 import { assessFits, decideOffer } from './agents';
 import { createPublisherTransfer, type VerifiedFunding } from './payments';
+import { createAgentToken, hashAgentToken, validateRegistration, validateExternalAction, type ExternalBrandRecord } from './external-brands';
 
 type MoneyMode = 'sandbox'|'simulation';
 interface Account {balance:number; reserved:number; spent:number}
@@ -44,10 +45,79 @@ export class ExchangeWorkspace extends DurableObject<Env> {
   private account(mode:MoneyMode,brandId:string):Account {return this.get<Account>('account',`${mode}:${brandId}`)??{balance:0,reserved:0,spent:0};}
   private mode():MoneyMode {return this.env.STRIPE_SECRET_KEY && this.env.STRIPE_WEBHOOK_SECRET ? 'sandbox':'simulation';}
   private campaigns(mode=this.mode()):Campaign[] {return this.all<Campaign>('campaign').map(c=>{const acc=this.account(mode,c.brand_id);return {...c,balance_cents:acc.balance,reserved_cents:acc.reserved,spent_cents:acc.spent};});}
+  private catalog():Brand[] {return [...brands,...this.all<ExternalBrandRecord>('brand_agent').map(r=>r.brand)];}
+  async hasBrand(id:string) {return this.catalog().some(b=>b.id===id);}
+  async listBrandAgents() {return {agents:this.all<ExternalBrandRecord>('brand_agent').map(r=>({brand:r.brand,created_at:r.created_at,revoked:!!r.revoked_at,last_seen_at:this.get<{at:string}>('agent_seen',r.brand.id)?.at,active:this.get<Campaign>('campaign',r.brand.id)?.active??false}))};}
+  async registerBrandAgent(input:unknown) {
+    const id=`brand-${crypto.randomUUID()}`;
+    const {brand,campaign}=validateRegistration(input,id);
+    const token=createAgentToken(),token_hash=await hashAgentToken(token);
+    this.ctx.storage.transactionSync(()=>{
+      if(this.all('brand_agent').length>=20)throw new Error('Pilot workspace supports up to 20 invited brands.');
+      this.put('brand_agent',id,{brand,token_hash,created_at:iso()} satisfies ExternalBrandRecord);
+      this.put('campaign',id,{...campaign,agent_kind:'external'} satisfies Campaign);
+      for(const mode of ['simulation','sandbox'])this.put('account',`${mode}:${id}`,{balance:0,reserved:0,spent:0});
+    });
+    return {brand,token};
+  }
+  async revokeBrandAgent(id:string) {
+    this.ctx.storage.transactionSync(()=>{
+      const r=this.get<ExternalBrandRecord>('brand_agent',id);if(!r)throw new Error('Brand agent not found');
+      r.revoked_at=iso();this.put('brand_agent',id,r);
+      const campaign=this.get<Campaign>('campaign',id)!;campaign.active=false;campaign.version++;this.put('campaign',id,campaign);
+    });return {revoked:true};
+  }
+  private async authenticatedBrand(token:string) {
+    if(typeof token!=='string'||token.length<24||token.length>512)throw new Error('Agent authentication required');
+    const hash=await hashAgentToken(token);
+    const record=this.all<ExternalBrandRecord>('brand_agent').find(r=>r.token_hash===hash&&!r.revoked_at);
+    if(!record)throw new Error('Agent authentication required');
+    const seen=this.get<{at:string}>('agent_seen',record.brand.id);
+    if(!seen||Date.now()-Date.parse(seen.at)>15000)this.put('agent_seen',record.brand.id,{at:iso()});
+    return record;
+  }
+  async brandAgentStatus(token:string) {
+    const r=await this.authenticatedBrand(token);const campaign=this.campaigns().find(c=>c.brand_id===r.brand.id)!;
+    if(this.get<ExternalBrandRecord>('brand_agent',r.brand.id)?.revoked_at)throw new Error('Agent authentication required');
+    return {brand:r.brand,campaign,active:campaign.active,revoked:false};
+  }
+  async brandAgentOpportunities(token:string) {
+    const r=await this.authenticatedBrand(token);
+    if(this.get<ExternalBrandRecord>('brand_agent',r.brand.id)?.revoked_at)throw new Error('Agent authentication required');
+    const opportunities=this.all<Auction>('auction').flatMap(a=>{
+      const job=this.get<Job>('job',a.id),bidder=a.bidders.find(b=>b.brand.id===r.brand.id);
+      if(a.status!=='running'||a.mode!=='live'||!job||job.phase!=='round'||job.deadline<=Date.now()||!bidder||bidder.finalized||bidder.withdrawn||bidder.campaign.agent_kind!=='external'||this.get('submission',`${a.id}:${job.round}:${r.brand.id}`))return [];
+      const previous=a.rounds.at(-1);
+      return [{auction_id:a.id,round:job.round,round_token:job.id,deadline:new Date(job.deadline).toISOString(),intent:a.intent,preferences:a.preferences,own_catalog:bidder.brand,own_fit:bidder.fit,own_campaign:{max_cpc_cents:bidder.campaign.max_cpc_cents,max_discount_cents:bidder.campaign.max_discount_cents,available_budget_cents:Math.max(0,bidder.campaign.balance_cents-bidder.campaign.reserved_cents),strategy:bidder.campaign.strategy},previous_offer:bidder.offer,public_board:previous?.offers??[],feedback:previous?.feedback??'Initial sealed round; no public offers yet.',reference_price_cents:a.reference_price_cents}];
+    });
+    return {brand:r.brand,opportunities};
+  }
+  async submitBrandAgentAction(token:string,input:Record<string,unknown>) {
+    const record=await this.authenticatedBrand(token);
+    if(this.get<ExternalBrandRecord>('brand_agent',record.brand.id)?.revoked_at)throw new Error('Agent authentication required');
+    const id=input.auction_id;if(typeof id!=='string')throw new Error('Opportunity not available');
+    const a=this.get<Auction>('auction',id),job=this.get<Job>('job',id),bidder=a?.bidders.find(b=>b.brand.id===record.brand.id);
+    if(!a||!bidder||bidder.campaign.agent_kind!=='external'||bidder.withdrawn||bidder.finalized||a.mode!=='live')throw new Error('Opportunity not available');
+    if(a.status!=='running'||!job||job.phase!=='round'||job.id!==input.round_token||job.round!==input.round||Date.now()>=job.deadline)throw new Error('Round is closed or stale');
+    let action:AgentAction;
+    try{action=validateExternalAction(input.action,bidder);}catch(e){
+      this.audit(a,'agent.rejected',{reason:'Invalid action; previous committed offer remains unchanged'},{actor:record.brand.id,round:job.round,method:'POST',url:'/v1/brand-agent/actions',correlation_id:job.id,status:'rejected',http_status:400});this.put('auction',id,a);throw e;
+    }
+    const key=`${id}:${job.round}:${bidder.brand.id}`;
+    const previous=this.get<AgentAction|string>('submission',key);
+    if(previous){if(JSON.stringify(previous)===JSON.stringify(action))return {accepted:true,idempotent:true,auction_id:id,round:job.round};throw new Error('Round already has a submission');}
+    // No await between ownership/deadline checks and persistence.
+    this.ctx.storage.transactionSync(()=>{
+      this.put('submission',key,action);
+      const publicAction=action.action==='submit'?{action:action.action,bid_cents:action.bid_cents,discount_cents:action.discount_cents,final:action.final??false}:{action:action.action};
+      this.audit(a,'agent.submission',{action:publicAction,validation:'pending_commit'},{actor:record.brand.id,round:job.round,method:'POST',url:'/v1/brand-agent/actions',correlation_id:job.id,status:'received',http_status:200});
+      this.put('auction',id,a);
+    });return {accepted:true,idempotent:false,auction_id:id,round:job.round};
+  }
   private async schedule(at=Date.now()+100) {const current=await this.ctx.storage.getAlarm(); if(current===null || at<current) await this.ctx.storage.setAlarm(at);}
   async bootstrap():Promise<Bootstrap> {
     this.expireReservations();
-    return {brands,scenarios,campaigns:this.campaigns(),capabilities:{live_agents:!!this.env.OPENAI_API_KEY,stripe:this.mode()==='sandbox',model:this.env.OPENAI_MODEL,demo_only:true},auctions:this.all<Auction>('auction').reverse().slice(0,30),ledger:this.all<LedgerEntry>('ledger').reverse()};
+    return {brands:this.catalog(),scenarios,campaigns:this.campaigns(),capabilities:{live_agents:!!this.env.OPENAI_API_KEY,stripe:this.mode()==='sandbox',model:this.env.OPENAI_MODEL,demo_only:true},auctions:this.all<Auction>('auction').reverse().slice(0,30),ledger:this.all<LedgerEntry>('ledger').reverse()};
   }
   async listAuctions() {return this.all<Auction>('auction').reverse().slice(0,50);}
   async readAuction(id:string) {this.expireReservations();const a=this.get<Auction>('auction',id);if(!a)throw new Error('Auction not found');return a;}
@@ -58,7 +128,7 @@ export class ExchangeWorkspace extends DurableObject<Env> {
     this.expireReservations();
     if(input.payment_mode==='sandbox'&&(input.mode!=='live'||this.mode()!=='sandbox'))throw new Error('Stripe sandbox requires live agents and configured Stripe credentials.');
     const moneyMode=input.mode==='simulation'?'simulation':input.payment_mode??this.mode();
-    const a=createAuction({...input,id:crypto.randomUUID(),campaigns:this.campaigns(moneyMode)});
+    const a=createAuction({...input,id:crypto.randomUUID(),campaigns:this.campaigns(moneyMode),catalog:this.catalog()});
     a.payment_mode=moneyMode;
     this.audit(a,'auction.request',{scenario:a.scenario,publisher_id:a.publisher_id,intent:a.intent,preferences:a.preferences,mode:a.mode,payment_mode:moneyMode,max_rounds:a.max_rounds,target_score:a.target_score},
       {status:'accepted',...(input.request_path?{method:'POST',url:input.request_path}:{})});
@@ -88,6 +158,12 @@ export class ExchangeWorkspace extends DurableObject<Env> {
   }
   async updateCampaign(id:string,patch:Record<string,unknown>) {
     const c=this.get<Campaign>('campaign',id);if(!c)throw new Error('Campaign not found');
+    if(patch.active===true&&c.agent_kind==='external'){
+      const record=this.get<ExternalBrandRecord>('brand_agent',id)!;
+      if(record.revoked_at)throw new Error('Revoked brand agent cannot be activated');
+      const active=this.catalog().filter(b=>b.scenario===record.brand.scenario&&b.id!==id&&this.get<Campaign>('campaign',b.id)?.active&&this.get<Campaign>('campaign',b.id)?.agent_kind==='external');
+      if(active.length>=3)throw new Error('Pilot allows three active external brands per scenario');
+    }
     for(const key of ['max_cpc_cents','max_discount_cents'] as const) {
       const value=patch[key];if(value!==undefined){if(!Number.isSafeInteger(value)||Number(value)<(key==='max_cpc_cents'?1:0)||Number(value)>100000)throw new Error('Invalid campaign amount');c[key]=Number(value);}
     }
@@ -123,7 +199,7 @@ export class ExchangeWorkspace extends DurableObject<Env> {
       const brand=a.bidders.find(b=>b.brand.id===offer.brand_id)!.brand;
       acc.reserved+=offer.bid_cents;this.put('account',`${mode}:${brand.id}`,acc);
       a.winner=offer;
-      a.placement={id:crypto.randomUUID(),auction_id:a.id,publisher_id:a.publisher_id,brand_id:brand.id,offer,item:brand.item,code:brand.code,destination:brand.source_url,expires_at:new Date(Date.now()+600000).toISOString(),status:'reserved'};
+      a.placement={id:crypto.randomUUID(),auction_id:a.id,publisher_id:a.publisher_id,brand_id:brand.id,offer,item:brand.item,code:brand.code,destination:brand.source_url,description:brand.description,price_kind:brand.price_kind,expires_at:new Date(Date.now()+600000).toISOString(),status:'reserved'};
       this.audit(a,'placement.reserved',{placement_id:a.placement.id,brand_id:brand.id,bid_cents:offer.bid_cents,discount_cents:offer.discount_cents,expires_at:a.placement.expires_at,payment_mode:mode},{status:'reserved'});
       this.put('placement',a.placement.id,a.placement);return a;
     }
@@ -213,6 +289,8 @@ export class ExchangeWorkspace extends DurableObject<Env> {
       if(job.phase==='round'){
         a!.round_started_at=iso();a!.round_deadline=new Date(job.deadline).toISOString();
         this.audit(a!,'round.started',{deadline:a!.round_deadline,participants:a!.bidders.filter(b=>!b.finalized&&!b.withdrawn).map(b=>b.brand.id),mode:a!.mode},{correlation_id:job.id,status:'open'});this.put('auction',id,a);
+        for(const b of a!.bidders.filter(b=>a!.mode==='live'&&b.campaign.agent_kind==='external'&&!b.finalized&&!b.withdrawn))this.audit(a!,'agent.opportunity',{deadline:a!.round_deadline,transport:'authenticated_poll'},{actor:b.brand.id,round:job.round,correlation_id:job.id,status:'available'});
+        this.put('auction',id,a);
       }
     });
     await this.schedule(job.deadline+100);
@@ -241,6 +319,7 @@ export class ExchangeWorkspace extends DurableObject<Env> {
     } else {
       const frozen=structuredClone(a);
       await Promise.all(frozen.bidders.filter(b=>!b.finalized&&!b.withdrawn).map(async bidder=>{
+        if(frozen.mode==='live'&&bidder.campaign.agent_kind==='external')return;
         let result:AgentAction|string;
         try {
           result=frozen.mode==='live'?await decideOffer(frozen,bidder,{apiKey:this.env.OPENAI_API_KEY,model:this.env.OPENAI_MODEL,actor:bidder.brand.id,round:job.round,onTrace:event=>this.modelTrace(id,event)},AbortSignal.timeout(Math.max(1,job.deadline-Date.now()))):simulateAgentAction(frozen,bidder);

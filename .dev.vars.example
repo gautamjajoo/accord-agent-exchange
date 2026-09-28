@@ -1,6 +1,15 @@
+# Copy to .dev.vars on first setup only. Never commit populated credentials.
 OPENAI_API_KEY=
+# Unique random operator token, used for remote console sign-in.
+ADMIN_TOKEN=
+# Three distinct random server credentials. Required for deployed consumers.
+# Example shape (replace every value):
+# PUBLISHER_API_KEYS='{"wavelength":"replace-dating-key","wardrobe":"replace-shopping-key","cityguide":"replace-outings-key"}'
+PUBLISHER_API_KEYS=
+# Local-only legacy fallback when PUBLISHER_API_KEYS is absent.
+PUBLISHER_API_KEY=
+# Optional: live GPT works with simulated funds when Stripe is not configured.
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+# JSON mapping of publisher IDs to Stripe sandbox connected-account IDs.
 STRIPE_PUBLISHERS=
-ADMIN_TOKEN=
-PUBLISHER_API_KEY=
