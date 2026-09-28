@@ -4,7 +4,7 @@ vi.mock('cloudflare:workers',()=>({DurableObject:class {constructor(public ctx:u
 vi.mock('../src/server/agents',()=>({assessFits:vi.fn(),decideOffer:vi.fn()}));
 import { assessFits, decideOffer } from '../src/server/agents';
 import { harness, closeHarnesses } from './workspace-harness';
-afterEach(()=>{closeHarnesses();vi.clearAllMocks();});
+afterEach(()=>{closeHarnesses();vi.clearAllMocks();vi.useRealTimers();});
 const event=(actor:string,kind:string):AuditTrace=>({id:crypto.randomUUID(),at:new Date().toISOString(),kind,actor,correlation_id:`request-${actor}`,status:kind==='model.request'?'pending':'received'});
 describe('persisted exchange audit trace',()=>{
   it('preserves concurrent model lifecycle records through fit and sealed round commits',async()=>{
@@ -31,6 +31,9 @@ describe('persisted exchange audit trace',()=>{
     expect(pending.trace?.find(t=>t.kind==='round.started')?.payload).toMatchObject({participants:['blue-bottle','sightglass','ritual']});
     expect(Date.parse(pending.round_deadline!)-Date.parse(pending.round_started_at!)).toBeGreaterThanOrEqual(9990);
     responseGates.forEach(resolve=>resolve());await running;
+    expect(h.get<Auction>('auction',a.id)!.rounds).toHaveLength(0);
+    vi.useFakeTimers();vi.setSystemTime(Date.parse(pending.round_deadline!)+1);
+    await h.internal.processAuction(a.id);
     const completed=h.get<Auction>('auction',a.id)!;
     expect(completed.trace?.filter(t=>t.kind==='model.request')).toHaveLength(4);
     expect(completed.trace?.filter(t=>t.kind==='model.response')).toHaveLength(4);

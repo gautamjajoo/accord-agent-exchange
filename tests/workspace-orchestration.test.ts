@@ -23,6 +23,21 @@ beforeEach(()=>vi.clearAllMocks());
 afterEach(()=>{closeHarnesses();vi.useRealTimers();});
 
 describe('durable auction orchestration',()=>{
+  it('persists live submissions until the sealed window closes without repeating model calls',async()=>{
+    vi.useFakeTimers();
+    const h=harness();h.put('auction','auction',initial());
+    vi.mocked(decideOffer).mockResolvedValue(submit(100,100));
+    await h.internal.processAuction('auction');
+    const job=h.get<Job>('job','auction')!;
+    expect(h.get<Auction>('auction','auction')!.rounds).toHaveLength(0);
+    expect(h.get('submission','auction:1:sightglass')).toBeDefined();
+    await h.internal.processAuction('auction');
+    expect(decideOffer).toHaveBeenCalledTimes(3);
+    vi.setSystemTime(job.deadline+1);
+    await h.internal.processAuction('auction');
+    expect(h.get<Auction>('auction','auction')!.rounds).toHaveLength(1);
+    expect(decideOffer).toHaveBeenCalledTimes(3);
+  });
   it('does not resurrect a cancellation while round scheduling awaits storage',async()=>{
     const h=harness();h.put('auction','auction',afterRoundOne());
     const gate=deferred<number|null>();h.storage.getAlarm.mockImplementationOnce(()=>gate.promise);

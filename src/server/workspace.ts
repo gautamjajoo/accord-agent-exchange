@@ -252,6 +252,9 @@ export class ExchangeWorkspace extends DurableObject<Env> {
         if(Date.now()>job.deadline&&typeof result!=='string')result='timeout: offer arrived after the round deadline';
         this.put('submission',`${id}:${job.round}:${bidder.brand.id}`,result);
       }));
+      // Live auctions keep a full sealed round window. Persisted submissions
+      // are committed by the alarm, so navigation/restarts cannot skip it.
+      if(frozen.mode==='live'&&Date.now()<job.deadline){await this.schedule(job.deadline+50);return;}
       this.commitRound(id,job);
     }
     await this.schedule(Date.now()+1200);
